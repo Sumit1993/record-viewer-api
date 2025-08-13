@@ -2,9 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Put,
-  Delete,
-  Param,
   Body,
   Query,
   UsePipes,
@@ -12,10 +9,10 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ApiQuery, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { RecordsQueryDto } from './dto/records-query.dto';
 import { RecordsFilterDto } from './dto/records-filter.dto';
 import { RecordsService } from './records.service';
 import { CreateRecordDto } from './dto/create-record.dto';
-import { UpdateRecordDto } from './dto/update-record.dto';
 
 @Controller('records')
 @ApiTags('records')
@@ -49,40 +46,17 @@ export class RecordsController {
   @ApiQuery({ name: 'limit', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Records found' })
   @UsePipes(new ValidationPipe({ transform: true }))
-  async getRecords(
-    @Query('type') type: string,
-    @Query('filters') filters: string,
-    @Query('columns') columns: string,
-    @Query('sort') sort: string,
-    @Query('page') page: string,
-    @Query('limit') limit: string,
-  ) {
-    const allowedColumns = [
-      'id',
-      'recordNumber',
-      'recordType',
-      'applicantName',
-      'dateSubmitted',
-      'addresses',
-      'recordStatus',
-      'emails',
-      'phoneNumbers',
-      'description',
-      'tenure',
-    ];
-    const columnsArr = columns
-      ? columns
+  async getRecords(@Query() query: RecordsQueryDto) {
+    const columnsArr = query.columns
+      ? query.columns
           .split(',')
           .map((c) => c.trim())
           .filter(Boolean)
       : undefined;
-    if (columnsArr && columnsArr.some((col) => !allowedColumns.includes(col))) {
-      throw new BadRequestException('Invalid column(s) requested');
-    }
     let filterObj: RecordsFilterDto | undefined;
-    if (filters) {
+    if (query.filters) {
       try {
-        const parsedFilters: unknown = JSON.parse(filters);
+        const parsedFilters: unknown = JSON.parse(query.filters);
         filterObj = Object.assign(new RecordsFilterDto(), {
           filters: parsedFilters,
         });
@@ -91,24 +65,21 @@ export class RecordsController {
       }
     }
     let sortObj: { column: string; order: 'ASC' | 'DESC' } | undefined;
-    if (sort) {
-      const [column, order] = sort.split(':');
-      if (!allowedColumns.includes(column)) {
-        throw new BadRequestException('Invalid sort column');
-      }
+    if (query.sort) {
+      const [column, order] = query.sort.split(':');
       sortObj = {
         column,
         order: order?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
       };
     }
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 20;
+    const pageNum = query.page ? parseInt(query.page, 10) : 1;
+    const limitNum = query.limit ? parseInt(query.limit, 10) : 20;
     if (isNaN(pageNum) || pageNum < 1)
       throw new BadRequestException('Invalid page number');
     if (isNaN(limitNum) || limitNum < 1)
       throw new BadRequestException('Invalid limit number');
     return this.recordsService.findAll(
-      type,
+      query.type,
       filterObj,
       columnsArr,
       sortObj,
@@ -117,27 +88,35 @@ export class RecordsController {
     );
   }
 
-  @Get(':id')
-  async getRecord(@Param('id') id: string) {
-    return this.recordsService.findOne(id);
+  @Get('autocomplete')
+  @ApiOperation({ summary: 'Get autocomplete suggestions for a field' })
+  @ApiQuery({
+    name: 'field',
+    required: true,
+    type: String,
+    description: 'The field to get suggestions for',
+  })
+  @ApiQuery({
+    name: 'query',
+    required: true,
+    type: String,
+    description: 'The search query',
+  })
+  @ApiResponse({ status: 200, description: 'Autocomplete suggestions found' })
+  async getAutocompleteSuggestions(
+    @Query('field') field: string,
+    @Query('query') query: string,
+  ) {
+    // Validate field against allowedColumns
+    const allowedColumns = RecordsQueryDto.allowedColumns;
+    if (!allowedColumns.includes(field)) {
+      throw new BadRequestException(`Invalid field for autocomplete: ${field}`);
+    }
+    return this.recordsService.getAutocompleteSuggestions(field, query);
   }
 
   @Post()
   async createRecord(@Body() createRecordDto: CreateRecordDto) {
     return this.recordsService.create(createRecordDto);
-  }
-
-  @Put(':id')
-  async updateRecord(
-    @Param('id') id: string,
-    @Body() updateRecordDto: UpdateRecordDto,
-  ) {
-    return this.recordsService.update(id, updateRecordDto);
-  }
-
-  @Delete(':id')
-  async deleteRecord(@Param('id') id: string) {
-    await this.recordsService.remove(id);
-    return { deleted: true };
   }
 }

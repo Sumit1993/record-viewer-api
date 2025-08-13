@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets } from 'typeorm';
 import { Record } from '../entities/record.entity';
 import { CreateRecordDto } from './dto/create-record.dto';
-import { UpdateRecordDto } from './dto/update-record.dto';
 import { RecordsFilterDto } from './dto/records-filter.dto';
 
 @Injectable()
@@ -43,13 +42,24 @@ export class RecordsService {
       qb.andWhere(
         new Brackets((qb) => {
           filters.filters.forEach((filter, filterIndex) => {
-            qb.orWhere(
+            qb.andWhere(
               new Brackets((qb) => {
                 filter.conditions.forEach((condition, conditionIndex) => {
                   const paramName = `p_${filterIndex}_${conditionIndex}`;
+                  let sqlOperator;
+                  let searchValue = condition.value;
+                  if (condition.operator === 'is') {
+                    sqlOperator = 'ILIKE';
+                    searchValue = `%${searchValue}%`;
+                  } else if (condition.operator === 'is not') {
+                    sqlOperator = 'NOT ILIKE';
+                    searchValue = `%${searchValue}%`;
+                  } else {
+                    sqlOperator = condition.operator;
+                  }
                   qb.orWhere(
-                    `record.${filter.field} ${condition.operator} :${paramName}`,
-                    { [paramName]: condition.value },
+                    `record.${filter.field} ${sqlOperator} :${paramName}`,
+                    { [paramName]: searchValue },
                   );
                 });
               }),
@@ -111,19 +121,6 @@ export class RecordsService {
     return this.recordRepository.save(record);
   }
 
-  async update(id: string, updateRecordDto: UpdateRecordDto): Promise<Record> {
-    await this.recordRepository.update(id, updateRecordDto);
-    const updated = await this.findOne(id);
-    if (!updated) {
-      throw new Error(`Record with id ${id} not found after update.`);
-    }
-    return updated;
-  }
-
-  async remove(id: string): Promise<void> {
-    await this.recordRepository.delete(id);
-  }
-
   private async getLastUpdated(): Promise<Record> {
     const record = await this.recordRepository.findOne({
       where: {},
@@ -133,5 +130,24 @@ export class RecordsService {
       throw new Error('No records found');
     }
     return record;
+  }
+
+  async getAutocompleteSuggestions(
+    field: string,
+    query: string,
+  ): Promise<string[]> {
+    const qb = this.recordRepository.createQueryBuilder('record');
+    const results = await qb
+      .select(`record.${field}`)
+      .distinct(true)
+      .where(`record.${field} ILIKE :query`, { query: `%${query}%` })
+      .orderBy(`record.${field}`, 'ASC')
+      .limit(5)
+      .getRawMany();
+
+    if (!results || results.length === 0) {
+      throw new Error('No records found');
+    }
+    return results.map((row) => row[`record_${field}`]);
   }
 }

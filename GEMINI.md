@@ -3,13 +3,14 @@
 This is a NestJS API application named `record-viewer-api` designed for managing and viewing records. It leverages TypeORM for database interactions with PostgreSQL and provides a RESTful API with advanced filtering, sorting, and pagination capabilities. The application also includes Swagger for API documentation.
 
 **Key Features:**
+
 - **Record Management:** Provides CRUD (Create, Read, Update, Delete) operations for records.
 - **Advanced Filtering:** Supports complex filtering logic with nested conditions.
 - **Pagination and Sorting:** Enables efficient retrieval of large datasets.
 - **API Documentation:** Integrated with Swagger for interactive API exploration.
 - **Database:** Uses PostgreSQL as the primary data store.
 
-# Building and Running
+## Building and Running
 
 This project uses `npm` for dependency management and script execution.
 
@@ -85,7 +86,7 @@ To revert the last migration:
 npm run migration:revert
 ```
 
-# Development Conventions
+## Development Conventions
 
 - **Language:** TypeScript
 - **Framework:** NestJS
